@@ -49,7 +49,8 @@ If vault ciphertext/metadata is modified manually, verification fails and vault 
 ### 4) Secure export/import (Diffie-Hellman)
 
 ```bash
-python3 password_manager.py export --sender alice --recipient bob --master-password alice-secret --out transfer/package.json
+python3 password_manager.py prepare-import --recipient bob --sender alice --out transfer/recipient-session.json
+python3 password_manager.py export --sender alice --master-password alice-secret --recipient-session transfer/recipient-session.json --out transfer/package.json
 python3 password_manager.py import --recipient bob --sender alice --master-password bob-secret --package transfer/package.json
 ```
 
