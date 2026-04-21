@@ -128,7 +128,7 @@ class ElGamalSignature:
 class DiffieHellman:
     @staticmethod
     def generate_keypair(q: int, alpha: int) -> Tuple[int, int]:
-        private_key = secrets.randbelow(q - 3) + 2
+        private_key = secrets.randbelow(q - 2) + 2
         public_key = pow(alpha, private_key, q)
         return private_key, public_key
 
@@ -225,11 +225,14 @@ class PasswordManager:
         self._vault_path(username).write_text(json.dumps(vault, indent=2), encoding="utf-8")
 
     def _verify_vault_signature(self, username: str, vault: Dict[str, str]) -> bool:
-        signer = vault["signer"]
-        public_key = self._load_public_key(signer)
-        digest = sha256_int(self._signature_payload(vault))
-        sig = vault["signature"]
-        return ElGamalSignature.verify(public_key, digest, (sig["r"], sig["s"]))
+        try:
+            signer = vault["signer"]
+            public_key = self._load_public_key(signer)
+            digest = sha256_int(self._signature_payload(vault))
+            sig = vault["signature"]
+            return ElGamalSignature.verify(public_key, digest, (sig["r"], sig["s"]))
+        except (FileNotFoundError, KeyError, TypeError):
+            return False
 
     def initialize_user(self, username: str, master_password: str) -> None:
         params = self.ensure_parameters()["elgamal"]
@@ -301,33 +304,69 @@ class PasswordManager:
             raise ValueError("Credential not found")
         self._store_entries(username, master_password, updated)
 
-    def export_vault(self, sender: str, recipient: str, sender_master_password: str, package_path: Path) -> None:
+    def prepare_import_session(self, recipient: str, sender: str, session_path: Path) -> None:
+        params = self.ensure_parameters()["diffie_hellman"]
+        q = params["q"]
+        alpha = params["alpha"]
+
+        recipient_private = self._load_private_key(recipient)
+        recipient_dh_private, recipient_dh_public = DiffieHellman.generate_keypair(q, alpha)
+
+        dh_digest = sha256_int(str(recipient_dh_public).encode("utf-8"))
+        sig_r, sig_s = ElGamalSignature.sign(recipient_private, dh_digest)
+        session_id = secrets.token_hex(16)
+
+        handshake = {
+            "session_id": session_id,
+            "recipient": recipient,
+            "sender": sender,
+            "recipient_dh_public": recipient_dh_public,
+            "recipient_dh_signature": {"r": sig_r, "s": sig_s},
+        }
+        session_path.parent.mkdir(parents=True, exist_ok=True)
+        session_path.write_text(json.dumps(handshake, indent=2), encoding="utf-8")
+
+        session_state = {
+            "session_id": session_id,
+            "recipient": recipient,
+            "sender": sender,
+            "dh_private": recipient_dh_private,
+            "q": q,
+        }
+        sessions_dir = self._sessions_dir(recipient)
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        state_file = sessions_dir / f"{session_id}.json"
+        state_file.write_text(json.dumps(session_state, indent=2), encoding="utf-8")
+        os.chmod(state_file, 0o600)
+
+    def export_vault(self, sender: str, sender_master_password: str, recipient_session_path: Path, package_path: Path) -> None:
+        session_data = json.loads(recipient_session_path.read_text(encoding="utf-8"))
+        recipient = session_data["recipient"]
+        if session_data["sender"] != sender:
+            raise ValueError("Recipient session sender mismatch")
+
         params = self.ensure_parameters()["diffie_hellman"]
         q = params["q"]
         alpha = params["alpha"]
 
         sender_dh_private, sender_dh_public = DiffieHellman.generate_keypair(q, alpha)
-        recipient_dh_private, recipient_dh_public = DiffieHellman.generate_keypair(q, alpha)
-
+        recipient_dh_public = session_data["recipient_dh_public"]
         sender_private = self._load_private_key(sender)
         sender_public = self._load_public_key(sender)
-        recipient_private = self._load_private_key(recipient)
         recipient_public = self._load_public_key(recipient)
-
-        sender_pub_hash = sha256_int(str(sender_dh_public).encode("utf-8"))
-        sender_pub_sig = ElGamalSignature.sign(sender_private, sender_pub_hash)
-        if not ElGamalSignature.verify(sender_public, sender_pub_hash, sender_pub_sig):
-            raise ValueError("Sender DH key signature verification failed")
-
-        recipient_pub_hash = sha256_int(str(recipient_dh_public).encode("utf-8"))
-        recipient_pub_sig = ElGamalSignature.sign(recipient_private, recipient_pub_hash)
-        if not ElGamalSignature.verify(recipient_public, recipient_pub_hash, recipient_pub_sig):
+        recipient_dh_sig = session_data["recipient_dh_signature"]
+        recipient_dh_digest = sha256_int(str(recipient_dh_public).encode("utf-8"))
+        if not ElGamalSignature.verify(
+            recipient_public,
+            recipient_dh_digest,
+            (recipient_dh_sig["r"], recipient_dh_sig["s"]),
+        ):
             raise ValueError("Recipient DH key signature verification failed")
 
+        sender_dh_digest = sha256_int(str(sender_dh_public).encode("utf-8"))
+        sender_dh_sig = ElGamalSignature.sign(sender_private, sender_dh_digest)
+
         sender_secret = DiffieHellman.shared_secret(recipient_dh_public, sender_dh_private, q)
-        recipient_secret = DiffieHellman.shared_secret(sender_dh_public, recipient_dh_private, q)
-        if sender_secret != recipient_secret:
-            raise ValueError("Diffie-Hellman shared secret mismatch")
 
         session_key = sha256_bytes(str(sender_secret).encode("utf-8"))
         entries = self._load_entries(sender, sender_master_password)
@@ -337,10 +376,11 @@ class PasswordManager:
         )
 
         package = {
-            "session_id": secrets.token_hex(16),
+            "session_id": session_data["session_id"],
             "sender": sender,
             "recipient": recipient,
             "sender_dh_public": sender_dh_public,
+            "sender_dh_signature": {"r": sender_dh_sig[0], "s": sender_dh_sig[1]},
             "recipient_dh_public": recipient_dh_public,
             "payload": {**encrypted_payload, "signer": sender},
         }
@@ -351,18 +391,6 @@ class PasswordManager:
         package_path.parent.mkdir(parents=True, exist_ok=True)
         package_path.write_text(json.dumps(package, indent=2), encoding="utf-8")
 
-        session_state = {
-            "session_id": package["session_id"],
-            "dh_private": recipient_dh_private,
-            "sender_dh_public": sender_dh_public,
-            "q": q,
-        }
-        sessions_dir = self._sessions_dir(recipient)
-        sessions_dir.mkdir(parents=True, exist_ok=True)
-        session_file = sessions_dir / f"{package['session_id']}.json"
-        session_file.write_text(json.dumps(session_state, indent=2), encoding="utf-8")
-        os.chmod(session_file, 0o600)
-
     def import_vault(self, recipient: str, sender: str, recipient_master_password: str, package_path: Path) -> None:
         package = json.loads(package_path.read_text(encoding="utf-8"))
         if package["sender"] != sender or package["recipient"] != recipient:
@@ -372,8 +400,15 @@ class PasswordManager:
         if not session_file.exists():
             raise ValueError("Missing DH session state for this import")
         session = json.loads(session_file.read_text(encoding="utf-8"))
+        if session["sender"] != sender or session["recipient"] != recipient:
+            raise ValueError("Session sender/recipient mismatch")
 
         sender_public = self._load_public_key(sender)
+        sender_dh_sig = package["sender_dh_signature"]
+        sender_dh_digest = sha256_int(str(package["sender_dh_public"]).encode("utf-8"))
+        if not ElGamalSignature.verify(sender_public, sender_dh_digest, (sender_dh_sig["r"], sender_dh_sig["s"])):
+            raise ValueError("Sender DH key signature verification failed")
+
         payload = package["payload"]
         sig = payload["signature"]
         payload_digest = sha256_int(self._signature_payload(payload))
@@ -381,7 +416,7 @@ class PasswordManager:
             raise ValueError("Transferred vault signature verification failed")
 
         shared_secret = DiffieHellman.shared_secret(
-            session["sender_dh_public"],
+            package["sender_dh_public"],
             session["dh_private"],
             session["q"],
         )
@@ -433,10 +468,15 @@ def parse_args() -> argparse.Namespace:
     list_cmd.add_argument("--user", required=True)
     list_cmd.add_argument("--master-password", required=True)
 
+    prepare_cmd = subparsers.add_parser("prepare-import", help="Prepare recipient DH session for secure import")
+    prepare_cmd.add_argument("--recipient", required=True)
+    prepare_cmd.add_argument("--sender", required=True)
+    prepare_cmd.add_argument("--out", type=Path, required=True)
+
     export_cmd = subparsers.add_parser("export", help="Export sender vault securely to recipient")
     export_cmd.add_argument("--sender", required=True)
-    export_cmd.add_argument("--recipient", required=True)
     export_cmd.add_argument("--master-password", required=True)
+    export_cmd.add_argument("--recipient-session", type=Path, required=True)
     export_cmd.add_argument("--out", type=Path, required=True)
 
     import_cmd = subparsers.add_parser("import", help="Import transferred vault package")
@@ -473,8 +513,11 @@ def main() -> None:
             print("Credential deleted and vault re-signed")
         elif args.command == "list":
             print(json.dumps(manager.list_credentials(args.user, args.master_password), indent=2))
+        elif args.command == "prepare-import":
+            manager.prepare_import_session(args.recipient, args.sender, args.out)
+            print(f"Recipient import session created at {args.out}")
         elif args.command == "export":
-            manager.export_vault(args.sender, args.recipient, args.master_password, args.out)
+            manager.export_vault(args.sender, args.master_password, args.recipient_session, args.out)
             print(f"Export package created at {args.out}")
         elif args.command == "import":
             manager.import_vault(args.recipient, args.sender, args.master_password, args.package)
