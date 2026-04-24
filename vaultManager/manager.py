@@ -9,7 +9,6 @@ It does NOT own the ElGamal keys directly – it asks VaultSigner to sign.
 """
 
 import json
-import os
 from pathlib import Path
 from typing import Dict, List
 
@@ -51,10 +50,12 @@ class VaultManager:
     def _load_entries(self, username: str, master_password: str) -> List[Dict[str, str]]:
         """Read, signature-verify, decrypt, and return the credential list."""
         vault = json.loads(self.vault_path(username).read_text(encoding="utf-8"))
-        if not self.signer.verify(vault):
+
+        if not self.signer.verify(vault, username):
             raise ValueError("Vault signature verification failed. Possible tampering detected.")
+        
         data_key = VaultCrypto.derive_data_key(master_password)
-        plaintext = VaultCrypto.aes_gcm_decrypt(data_key, vault)
+        plaintext = VaultCrypto.aes_gcm_decrypt(data_key, vault["encrypted_vault"])
         return json.loads(plaintext.decode("utf-8"))
 
     def _store_entries(
@@ -79,6 +80,7 @@ class VaultManager:
         """Create an empty encrypted vault for *username* and sign it."""
         data_key = VaultCrypto.derive_data_key(master_password)
         encrypted = VaultCrypto.aes_gcm_encrypt(data_key, b"[]")
+        encrypted = VaultCrypto.aes_gcm_encrypt(data_key, b"[]")
         self.signer.sign_and_save(username, encrypted, signer=username)
 
     # ------------------------------------------------------------------
@@ -93,7 +95,6 @@ class VaultManager:
         login: str,
         password: str,
     ) -> None:
-        """Append a new credential entry and re-encrypt / re-sign the vault."""
         entries = self._load_entries(username, master_password)
         entries.append({"site": site, "username": login, "password": password})
         self._store_entries(username, master_password, entries)
@@ -101,7 +102,6 @@ class VaultManager:
     def list_credentials(
         self, username: str, master_password: str
     ) -> List[Dict[str, str]]:
-        """Return all credential entries for *username*."""
         return self._load_entries(username, master_password)
 
     def retrieve_credential(
@@ -111,9 +111,8 @@ class VaultManager:
         site: str,
         login: str = "",
     ) -> Dict[str, str]:
-        """Return the first entry matching *site* (and optionally *login*)."""
         for entry in self._load_entries(username, master_password):
-            if entry["site"] == site and (not login or entry["username"] == login):
+            if entry["site"] == site:
                 return entry
         raise ValueError("Credential not found")
 

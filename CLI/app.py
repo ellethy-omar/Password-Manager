@@ -112,7 +112,7 @@ class PasswordManagerApp:
         vault = _json.loads(
             (self.base_dir / "users" / username / "vault.json").read_text(encoding="utf-8")
         )
-        return self.signer.verify(vault)
+        return self.signer.verify(vault, username)
 
     # ------------------------------------------------------------------
     # Export / import operations (Module 4) – delegated to VaultExporter
