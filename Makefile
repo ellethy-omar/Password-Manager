@@ -15,8 +15,8 @@ create-user:
 		--user $(USER) \
 		--master-password $(MASTER)
 
-.PHONY: add
-add:
+.PHONY: add-credential
+add-credential:
 	-$(PYTHON) $(MAIN) add \
 		--user $(USER) \
 		--master-password $(MASTER) \
@@ -29,8 +29,14 @@ retrieve:
 	$(PYTHON) $(MAIN) retrieve \
 		--user $(USER) \
 		--master-password $(MASTER) \
-		--site $(SITE) \
-		--username $(USERNAME)
+		--site $(SITE)
+
+.PHONY: retrieve-failure
+retrieve-failure:
+	-$(PYTHON) $(MAIN) retrieve \
+		--user $(USER) \
+		--master-password $(MASTER) \
+		--site non_existent_site
 
 .PHONY: update
 update:
@@ -41,13 +47,21 @@ update:
 		--username $(USERNAME) \
 		--new-password $(NEW_PASSWORD)
 
-.PHONY: retrieve-after-update
-retrieve-after-update:
-	$(PYTHON) $(MAIN) retrieve \
+.PHONY: delete-credential
+delete-credential:
+	-$(PYTHON) $(MAIN) delete \
 		--user $(USER) \
 		--master-password $(MASTER) \
 		--site $(SITE) \
 		--username $(USERNAME)
 
 .PHONY: test-flow
-test-flow: create-user add retrieve update retrieve-after-update
+test-flow:
+	$(MAKE) create-user
+	$(MAKE) add-credential
+	$(MAKE) retrieve
+	$(MAKE) retrieve-failure
+	$(MAKE) update
+	$(MAKE) retrieve
+	$(MAKE) delete-credential
+	$(MAKE) retrieve

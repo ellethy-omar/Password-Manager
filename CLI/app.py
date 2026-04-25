@@ -30,10 +30,6 @@ class PasswordManagerApp:
         self.vault_manager = VaultManager(base_dir, self.signer)
         self.exporter = VaultExporter(base_dir, self.vault_manager, self.signer)
 
-    # ------------------------------------------------------------------
-    # Shared parameter management
-    # ------------------------------------------------------------------
-
     def ensure_parameters(self) -> Dict:
         """Load existing shared parameters or generate and persist new ones."""
         if self.params_path.exists():
@@ -51,10 +47,6 @@ class PasswordManagerApp:
         }
         self.params_path.write_text(json.dumps(params, indent=2), encoding="utf-8")
         return params
-
-    # ------------------------------------------------------------------
-    # User initialisation (Module 1)
-    # ------------------------------------------------------------------
 
     def initialize_user(self, username: str, master_password: str) -> None:
         """Create ElGamal keys and an empty encrypted vault for *username*."""
@@ -82,14 +74,10 @@ class PasswordManagerApp:
             ),
             encoding="utf-8",
         )
-        # Restrict private key permissions so only the owner can read it.
+
         os.chmod(private_key_path, 0o600)
 
         self.vault_manager.initialize_vault(username, master_password)
-
-    # ------------------------------------------------------------------
-    # Vault operations (Modules 2 & 3) – delegated to VaultManager
-    # ------------------------------------------------------------------
 
     def add_credential(self, username, master_password, site, login, password):
         self.vault_manager.add_credential(username, master_password, site, login, password)
@@ -97,8 +85,8 @@ class PasswordManagerApp:
     def list_credentials(self, username, master_password):
         return self.vault_manager.list_credentials(username, master_password)
 
-    def retrieve_credential(self, username, master_password, site, login=""):
-        return self.vault_manager.retrieve_credential(username, master_password, site, login)
+    def retrieve_credential(self, username, master_password, site):
+        return self.vault_manager.retrieve_credential(username, master_password, site)
 
     def update_credential(self, username, master_password, site, login, new_password):
         self.vault_manager.update_credential(username, master_password, site, login, new_password)
@@ -107,16 +95,9 @@ class PasswordManagerApp:
         self.vault_manager.delete_credential(username, master_password, site, login)
 
     def verify_vault(self, username: str) -> bool:
-        """Return True when the vault's ElGamal signature is valid."""
-        import json as _json
-        vault = _json.loads(
-            (self.base_dir / "users" / username / "vault.json").read_text(encoding="utf-8")
-        )
+        path = self.base_dir / "users" / username / "vault.json"
+        vault = json.loads(path.read_text(encoding="utf-8"))
         return self.signer.verify(vault, username)
-
-    # ------------------------------------------------------------------
-    # Export / import operations (Module 4) – delegated to VaultExporter
-    # ------------------------------------------------------------------
 
     def prepare_import_session(self, recipient, sender, session_path):
         self.exporter.prepare_import_session(recipient, sender, session_path)
