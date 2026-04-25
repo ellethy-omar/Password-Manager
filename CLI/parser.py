@@ -35,7 +35,6 @@ def build_parser() -> argparse.ArgumentParser:
     retrieve.add_argument("--user", required=True)
     retrieve.add_argument("--master-password", required=True)
     retrieve.add_argument("--site", required=True)
-    retrieve.add_argument("--username", default="")
 
     update = subparsers.add_parser("update", help="Update a credential's password")
     update.add_argument("--user", required=True)

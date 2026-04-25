@@ -41,21 +41,6 @@ class VaultSigner:
         raw = json.loads(self._public_key_path(username).read_text(encoding="utf-8"))
         return ElGamalPublicKey(p=raw["p"], alpha=raw["alpha"], y=raw["y"])
 
-    @staticmethod
-    def signature_payload(vault_like: Dict[str, str]) -> bytes:
-        payload = {
-            "ciphertext": vault_like["ciphertext"],
-            "nonce": vault_like["nonce"],
-            "tag": vault_like["tag"],
-            "signer": vault_like["signer"],
-        }
-
-        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-
-    # ------------------------------------------------------------------
-    # Sign / verify
-    # ------------------------------------------------------------------
-
     def sign_and_save(self, owner: str, encrypted_blob: str, signer: str) -> None:
         private_key = self.load_private_key(signer)
         vault = {"encrypted_vault": encrypted_blob}

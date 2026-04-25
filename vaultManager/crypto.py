@@ -1,8 +1,6 @@
 """AES-GCM symmetric encryption helpers used by the vault manager."""
 
 import base64
-from typing import Dict
-
 from Crypto.Cipher import AES
 
 from shared.crypto_utils import sha256_bytes
@@ -22,7 +20,7 @@ class VaultCrypto:
         """Returns a single base64 string: nonce(16) + tag(16) + ciphertext."""
         cipher = AES.new(key, AES.MODE_GCM)
         ciphertext, tag = cipher.encrypt_and_digest(plaintext)
-        combined = cipher.nonce + tag + ciphertext   # 16 + 16 + len(ciphertext)
+        combined = cipher.nonce + tag + ciphertext   # type: ignore
         return base64.b64encode(combined).decode("utf-8")
 
     @staticmethod
