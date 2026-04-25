@@ -72,14 +72,9 @@ class VaultManager:
         )
         self.signer.sign_and_save(username, encrypted, signer=username)
 
-    # ------------------------------------------------------------------
-    # Initialisation
-    # ------------------------------------------------------------------
-
     def initialize_vault(self, username: str, master_password: str) -> None:
         """Create an empty encrypted vault for *username* and sign it."""
         data_key = VaultCrypto.derive_data_key(master_password)
-        encrypted = VaultCrypto.aes_gcm_encrypt(data_key, b"[]")
         encrypted = VaultCrypto.aes_gcm_encrypt(data_key, b"[]")
         self.signer.sign_and_save(username, encrypted, signer=username)
 
@@ -109,7 +104,6 @@ class VaultManager:
         username: str,
         master_password: str,
         site: str,
-        login: str = "",
     ) -> Dict[str, str]:
         for entry in self._load_entries(username, master_password):
             if entry["site"] == site:

@@ -27,9 +27,10 @@ def handle_add(app: PasswordManagerApp, args) -> None:
 
 def handle_retrieve(app: PasswordManagerApp, args) -> None:
     item = app.retrieve_credential(
-        args.user, args.master_password, args.site, args.username
+        args.user, args.master_password, args.site
     )
     print(json.dumps(item, indent=2))
+    success("Retrieved Crediential successfully")
 
 
 def handle_update(app: PasswordManagerApp, args) -> None:
