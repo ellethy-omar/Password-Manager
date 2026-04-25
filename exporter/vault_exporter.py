@@ -143,20 +143,6 @@ class VaultExporter:
         recipient_handshake_path: Path,
         package_path: Path,
     ) -> None:
-        """Verify the recipient's DH handshake, encrypt the vault, and write a
-        signed transfer package to *package_path*.
-
-        Parameters
-        ----------
-        sender : str
-            Username of the exporting user.
-        sender_master_password : str
-            Master password used to decrypt the sender's local vault.
-        recipient_handshake_path : Path
-            Path to the handshake file produced by :meth:`prepare_import_session`.
-        package_path : Path
-            Destination for the signed transfer package.
-        """
         handshake = json.loads(recipient_handshake_path.read_text(encoding="utf-8"))
         recipient = handshake["recipient"]
         if handshake["sender"] != sender:
@@ -183,7 +169,7 @@ class VaultExporter:
         sender_dh_digest = sha256_int(str(sender_dh_public).encode("utf-8"))
         sender_dh_sig = ElGamalSignature.sign(sender_private_key, sender_dh_digest)
 
-        # Derive the session AES key from the Diffie-Hellman shared secret.
+        # Derive the session AES key from the DH shared secret.
         shared_secret = DiffieHellman.shared_secret(recipient_dh_public, sender_dh_private, q)
         session_key = sha256_bytes(str(shared_secret).encode("utf-8"))
 
@@ -194,7 +180,10 @@ class VaultExporter:
             json.dumps(entries, sort_keys=True, separators=(",", ":")).encode("utf-8"),
         )
 
-        # Build the package and sign the encrypted payload.
+        # Sign the encrypted blob directly — same pattern as VaultSigner.sign_and_save.
+        payload_digest = sha256_int(encrypted_payload.encode("utf-8"))
+        sig_r, sig_s = ElGamalSignature.sign(sender_private_key, payload_digest)
+
         package: Dict = {
             "session_id": handshake["session_id"],
             "sender": sender,
@@ -202,11 +191,12 @@ class VaultExporter:
             "sender_dh_public": sender_dh_public,
             "sender_dh_signature": {"r": sender_dh_sig[0], "s": sender_dh_sig[1]},
             "recipient_dh_public": recipient_dh_public,
-            "payload": {**encrypted_payload, "signer": sender},
+            "payload": {
+                "encrypted_blob": encrypted_payload,
+                "signer": sender,
+                "signature": {"r": sig_r, "s": sig_s},
+            },
         }
-        payload_digest = sha256_int(self.signer.signature_payload(package["payload"]))
-        sig_r, sig_s = ElGamalSignature.sign(sender_private_key, payload_digest)
-        package["payload"]["signature"] = {"r": sig_r, "s": sig_s}
 
         package_path.parent.mkdir(parents=True, exist_ok=True)
         package_path.write_text(json.dumps(package, indent=2), encoding="utf-8")
@@ -214,7 +204,7 @@ class VaultExporter:
     # ------------------------------------------------------------------
     # Phase 3 – recipient imports
     # ------------------------------------------------------------------
-
+    
     def import_vault(
         self,
         recipient: str,
@@ -222,19 +212,6 @@ class VaultExporter:
         recipient_master_password: str,
         package_path: Path,
     ) -> None:
-        """Verify, decrypt, and store the transfer package as the recipient's vault.
-
-        Parameters
-        ----------
-        recipient : str
-            Username of the receiving user.
-        sender : str
-            Username of the sending user.
-        recipient_master_password : str
-            Master password used to re-encrypt the vault on the recipient's side.
-        package_path : Path
-            Path to the transfer package written by :meth:`export_vault`.
-        """
         package = json.loads(package_path.read_text(encoding="utf-8"))
         if package["sender"] != sender or package["recipient"] != recipient:
             raise ValueError("Package sender/recipient mismatch")
@@ -257,27 +234,25 @@ class VaultExporter:
         ):
             raise ValueError("Sender DH key signature verification failed")
 
-        # Verify the encrypted payload signature.
         payload = package["payload"]
         payload_sig = payload["signature"]
-        payload_digest = sha256_int(self.signer.signature_payload(payload))
+        payload_digest = sha256_int(payload["encrypted_blob"].encode("utf-8"))
         if not ElGamalSignature.verify(
             sender_public_key, payload_digest, (payload_sig["r"], payload_sig["s"])
         ):
             raise ValueError("Transferred vault signature verification failed")
 
-        # Derive the shared session key and decrypt.
+        # Derive the same shared secret and decrypt.
         shared_secret = DiffieHellman.shared_secret(
             package["sender_dh_public"],
             session["dh_private"],
             session["q"],
         )
         session_key = sha256_bytes(str(shared_secret).encode("utf-8"))
-        plaintext = VaultCrypto.aes_gcm_decrypt(session_key, payload)
+        plaintext = VaultCrypto.aes_gcm_decrypt(session_key, payload["encrypted_blob"])
 
         # Re-encrypt under the recipient's master password and re-sign.
-        import json as _json
-        entries = _json.loads(plaintext.decode("utf-8"))
+        entries = json.loads(plaintext.decode("utf-8"))
         self.vault_manager._store_entries(recipient, recipient_master_password, entries)
 
         # Clean up ephemeral session state.
