@@ -35,50 +35,30 @@ class VaultSigner:
     def load_private_key(self, username: str) -> ElGamalPrivateKey:
         raw = json.loads(self._private_key_path(username).read_text(encoding="utf-8"))
         return ElGamalPrivateKey(p=raw["p"], alpha=raw["alpha"], x=raw["x"])
-    
+
     def load_public_key(self, username: str) -> ElGamalPublicKey:
         """Load and return the ElGamal public key for *username*."""
         raw = json.loads(self._public_key_path(username).read_text(encoding="utf-8"))
         return ElGamalPublicKey(p=raw["p"], alpha=raw["alpha"], y=raw["y"])
 
     def sign_and_save(self, owner: str, encrypted_blob: str, signer: str) -> None:
-        shaKey = sha256_int(encrypted_blob.encode("utf-8"))
-        privatKey = self.load_private_key(signer)
-        signature = ElGamalSignature.sign(privatKey, shaKey)
-
-        r_val, s_val = signature
-        vault_data = {
-            "encrypted_vault": encrypted_blob,
-            "signature": {
-                "r": r_val,
-                "s": s_val
-            }
-        }
-
-        vault_path = self._vault_path(owner)
-        vault_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(vault_path, 'w') as f:
-            json.dump(vault_data, f, indent=4)
+        private_key = self.load_private_key(signer)
+        vault = {"encrypted_vault": encrypted_blob}
+        digest = sha256_int(encrypted_blob.encode("utf-8"))
+        r, s = ElGamalSignature.sign(private_key, digest)
+        vault["signature"] = f"{r}:{s}"
+        self._vault_path(owner).write_text(json.dumps(vault, indent=2), encoding="utf-8")
 
     def verify(self, vault: Dict[str, str], username: str) -> bool:
-        encrypted_blob = vault.get("encrypted_vault")
-        signature_data = vault.get("signature")
-
-        if not encrypted_blob or not signature_data:
+        try:
+            public_key = self.load_public_key(username)
+            digest = sha256_int(vault["encrypted_vault"].encode("utf-8"))
+            r, s = (int(x) for x in vault["signature"].split(":"))
+            is_valid = ElGamalSignature.verify(public_key, digest, (r, s))
+            if is_valid:
+                print("Vault integrity verified. No tampering detected.")
+            else:
+                print("ALERT: Vault signature INVALID. The vault may have been tampered with!")
+            return is_valid
+        except (FileNotFoundError, KeyError, TypeError):
             return False
-        shaKey = sha256_int(encrypted_blob.encode("utf-8"))
-        pubKey = self.load_public_key(username)
-        r_val = signature_data.get("r")
-        s_val = signature_data.get("s")
-        if r_val is None or s_val is None:
-            return False
-        
-        
-        signature_tuple = (int(r_val), int(s_val))
-        is_valid = ElGamalSignature.verify(pubKey, shaKey, signature_tuple)
-        if is_valid:
-            print("Vault integrity verified. No tampering detected.")
-        else:
-            print("ALERT: Vault signature INVALID. The vault may have been tampered with!")
-            
-        return is_valid
