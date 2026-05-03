@@ -1,7 +1,4 @@
-<<<<<<< HEAD
-=======
 import secrets
->>>>>>> main
 from typing import Tuple
 
 # use secrets as random is a deterministic
