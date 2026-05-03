@@ -1,8 +1,3 @@
-"""ElGamal digital signature: key generation, signing, and verification.
-
-All three operations are implemented from scratch as required by the spec.
-"""
-
 import math
 import secrets
 from typing import Tuple

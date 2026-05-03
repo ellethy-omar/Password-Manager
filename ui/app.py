@@ -66,16 +66,20 @@ if not st.session_state.submitted:
     )
 
     if st.button("Continue →"):
-        if entered_name.strip() and entered_master_password.strip():
-            st.session_state.name = entered_name.strip()
-            st.session_state.password = entered_master_password.strip()
-            st.session_state.submitted = True
-            passwordManager.initialize_user(
-                entered_name.strip(), entered_master_password.strip()
-            )
-            st.rerun()
-        else:
-            st.warning("Please fill in both fields before continuing.")
+        try:
+            if entered_name.strip() and entered_master_password.strip():
+                st.session_state.name = entered_name.strip()
+                st.session_state.password = entered_master_password.strip()
+                st.session_state.submitted = True
+                passwordManager.initialize_user(
+                    entered_name.strip(), entered_master_password.strip()
+                )
+                st.rerun()
+            else:
+                st.warning("Please fill in both fields before continuing.")
+        except Exception as e:
+            st.error("Error Happened During Logging")
+            
 
 else:
     name = st.session_state.name
