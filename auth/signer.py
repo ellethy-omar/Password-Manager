@@ -14,12 +14,6 @@ from shared.crypto_utils import sha256_int
 
 
 class VaultSigner:
-    """Signs and verifies vault files using long-lived ElGamal keys.
-
-    This class does not generate keys.  It loads them from the paths provided
-    by the caller (which are controlled by the key-management layer).
-    """
-
     def __init__(self, base_dir: Path):
         self.base_dir = base_dir
 
@@ -37,14 +31,14 @@ class VaultSigner:
         return ElGamalPrivateKey(p=raw["p"], alpha=raw["alpha"], x=raw["x"])
 
     def load_public_key(self, username: str) -> ElGamalPublicKey:
-        """Load and return the ElGamal public key for *username*."""
         raw = json.loads(self._public_key_path(username).read_text(encoding="utf-8"))
         return ElGamalPublicKey(p=raw["p"], alpha=raw["alpha"], y=raw["y"])
 
     def sign_and_save(self, owner: str, encrypted_blob: str, signer: str) -> None:
         private_key = self.load_private_key(signer)
-        vault = {"encrypted_vault": encrypted_blob}
+        vault = { "encrypted_vault": encrypted_blob }
         digest = sha256_int(encrypted_blob.encode("utf-8"))
+        
         r, s = ElGamalSignature.sign(private_key, digest)
         vault["signature"] = f"{r}:{s}"
         self._vault_path(owner).write_text(json.dumps(vault, indent=2), encoding="utf-8")
@@ -53,8 +47,10 @@ class VaultSigner:
         try:
             public_key = self.load_public_key(username)
             digest = sha256_int(vault["encrypted_vault"].encode("utf-8"))
+
             r, s = (int(x) for x in vault["signature"].split(":"))
             is_valid = ElGamalSignature.verify(public_key, digest, (r, s))
+
             if is_valid:
                 print("Vault integrity verified. No tampering detected.")
             else:
