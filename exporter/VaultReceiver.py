@@ -134,7 +134,7 @@ class VaultReceiver:
         self.session_key = sha256_bytes(str(shared_secret).encode("utf-8"))
         print("[Receiver] Key exchange complete.")
 
-    def import_vault(self, receiver_master_password: str) -> None:
+    def import_vault(self, receiver_master_password: str) -> str:
         """
         Import Phase.
 
@@ -181,9 +181,9 @@ class VaultReceiver:
 
         # 5 — clean up all session files so ephemeral keys and ciphertext
         #     don't linger on disk after the transfer is complete.
-        self._cleanup_session(sessions_dir)
+        return self._cleanup_session(sessions_dir)
 
-    def _cleanup_session(self, sessions_dir: Path) -> None:
+    def _cleanup_session(self, sessions_dir: Path) -> str:
         """Delete all files written during this session."""
         files_to_delete = [
             sessions_dir / f"{self.sender}.json",
@@ -195,4 +195,4 @@ class VaultReceiver:
                 f.unlink()
             except FileNotFoundError:
                 pass  # already gone, nothing to do
-        print("[Receiver] Session files deleted.")
+        return f"[Receiver : {self.receiver}] Session files deleted."

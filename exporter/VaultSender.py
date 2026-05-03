@@ -140,7 +140,7 @@ class VaultSender:
         self.session_key = sha256_bytes(str(shared_secret).encode("utf-8"))
         print("[Sender] Key exchange complete.")
 
-    def transfer_vault(self, sender_master_password: str) -> None:
+    def transfer_vault(self, sender_master_password: str) -> str:
         """
         Transfer Phase.
 
@@ -178,7 +178,7 @@ class VaultSender:
         sessions_dir = self._sessions_dir(self.receiver)
         vault_file = sessions_dir / f"{self.sender}_vault.json"
         vault_file.write_text(json.dumps(package, indent=2), encoding="utf-8")
-        print(f"[Sender] Vault package written to {vault_file}")
+        return f"[{self.sender}] Vault package written to {vault_file}"
 
     def _cleanup_on_failure(self, sessions_dir: Path) -> None:
         files_to_delete = [

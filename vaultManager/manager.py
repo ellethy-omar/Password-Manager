@@ -101,7 +101,7 @@ class VaultManager:
                 entry["password"] = new_password
                 self._store_entries(username, master_password, entries)
                 return
-        raise ValueError("Credential not found")
+        raise ValueError("Invalid Website Added or username doesn't match")
 
     def delete_credential(
         self,

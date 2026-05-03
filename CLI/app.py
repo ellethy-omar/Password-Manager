@@ -54,7 +54,7 @@ class PasswordManagerApp:
 
         private_key_path = user_dir / "elgamal_private.json"
         if private_key_path.exists():
-            raise ValueError(f"User '{username}' already initialized")
+           self.vault_manager._load_entries(username, master_password)
 
         private_key, public_key = ElGamalSignature.keygen(params["p"], params["alpha"])
 
@@ -97,13 +97,13 @@ class PasswordManagerApp:
         vault = json.loads(path.read_text(encoding="utf-8"))
         return self.signer.verify(vault, username)
 
-    def export_vault(self, sender: str, master_password: str, receiver: str) -> None:
+    def export_vault(self, sender: str, master_password: str, receiver: str) -> str:
         self.sender.init_parameters(sender, receiver)
         self.sender.key_exchange_sender()
-        self.sender.transfer_vault(master_password)
+        return self.sender.transfer_vault(master_password)
 
-    def import_vault(self, receiver: str, sender: str, master_password: str) -> None:
+    def import_vault(self, receiver: str, sender: str, master_password: str) -> str:
         self.receiver.init_parameters(sender, receiver)
         self.receiver.key_exchange_receiver()
-        self.receiver.import_vault(master_password)
+        return self.receiver.import_vault(master_password)
  
