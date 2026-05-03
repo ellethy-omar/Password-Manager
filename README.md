@@ -1,119 +1,87 @@
-# Secure Password Manager
+# Password Manager
 
-A command-line password manager implementing four cryptographic modules:
+A secure credential management application with both a command-line interface and a Streamlit web UI.
 
-- **Module 1 – ElGamal Key Management** (`elGamal/`)
-- **Module 2 – Vault Encryption & Credential Management** (`vaultManager/`)
-- **Module 3 – Digital Signatures for Vault Integrity** (`auth/`)
-- **Module 4 – Secure Vault Export via Diffie-Hellman** (`exporter/`)
-
-## Project Structure
-
-```
-.
-├── run.py               # Entry-point – run this instead of python3 ...
-├── requirements.txt
-├── shared/              # Shared crypto helpers, prime utilities, constants
-├── elGamal/             # ElGamal keygen, signature, and Diffie-Hellman (from scratch)
-├── vaultManager/        # AES-GCM encryption and credential CRUD
-├── auth/                # Vault signing and signature verification
-├── exporter/            # DH-based secure vault export and import
-├── CLI/                 # Argument parser, command dispatcher, and app wiring
-└── tests/               # Unit tests per module + E2E tests + TESTING.md
-```
+---
 
 ## Requirements
 
-```bash
-python3 -m pip install -r requirements.txt
-```
+**Python 3.8+** is required.
 
-## Running the CLI
-
-Use `run.py` from the repository root:
+Install all dependencies with:
 
 ```bash
-python3 run.py <command> [options]
-python3 run.py --help
+pip install -r requirements.txt
 ```
 
-`--base-dir <path>` (default: `data/`) controls where all user data is stored.
+| Package        | Version | Purpose                                          |
+| -------------- | ------- | ------------------------------------------------ |
+| `pycryptodome` | 3.23.0  | Cryptographic operations (encryption/decryption) |
+| `streamlit`    | 1.57.0  | Web-based user interface                         |
 
-### 1) Initialize users
+---
+
+## Running the Application
+
+### Streamlit UI
+
+Launch the web interface with:
 
 ```bash
-python3 run.py init-user --user alice --master-password alice-secret
-python3 run.py init-user --user bob   --master-password bob-secret
+streamlit run ui/app.py
 ```
 
-### 2) Manage credentials
+Then open your browser and navigate to `http://localhost:8501`.
+
+---
+
+## 🛠️ Makefile Workflows
+
+A `Makefile` is provided for quickly running common workflows during development and testing. Default values for users, passwords, and sites are pre-configured at the top of the `Makefile` and can be overridden at runtime.
+
+### Available Targets
+
+| Target                   | Description                                                 |
+| ------------------------ | ----------------------------------------------------------- |
+| `make create-user`       | Initialize the primary test user vault                      |
+| `make create-receiver`   | Initialize a secondary receiver user vault                  |
+| `make add-credential`    | Add a first test credential                                 |
+| `make add-credential-2`  | Add a second test credential                                |
+| `make retrieve`          | Retrieve a credential by site                               |
+| `make retrieve-failure`  | Attempt retrieval of a non-existent site (expected to fail) |
+| `make update`            | Update the password for an existing credential              |
+| `make delete-credential` | Delete a credential                                         |
+| `make list`              | List all credentials for the primary user                   |
+| `make list-receiver`     | List all credentials for the receiver user                  |
+| `make verify`            | Verify the vault signature of the primary user              |
+| `make verify-receiver`   | Verify the vault signature of the receiver user             |
+| `make export-vault`      | Export the primary user's vault to the receiver             |
+| `make import-vault`      | Import the exported vault into the receiver's account       |
+| `make clean-data`        | Wipe all data in the `data/` directory                      |
+| `make test-crud`         | Run the full CRUD test suite (Modules 1–3)                  |
+| `make test-all`          | Run all tests end-to-end                                    |
+
+### Running a Full Test Suite
 
 ```bash
-python3 run.py add      --user alice --master-password alice-secret --site github.com --username alice --password p@ss
-python3 run.py retrieve --user alice --master-password alice-secret --site github.com --username alice
-python3 run.py list     --user alice --master-password alice-secret
-python3 run.py update   --user alice --master-password alice-secret --site github.com --username alice --new-password n3wp@ss
-python3 run.py delete   --user alice --master-password alice-secret --site github.com --username alice
+make test-crud
 ```
 
-### 3) Verify vault integrity
+### Overriding Default Values
+
+You can override any variable inline:
 
 ```bash
-python3 run.py verify --user alice
+make create-user USER=alice MASTER=my_secret_password
+make add-credential SITE=google.com USERNAME=alice PASSWORD=p@ssw0rd
 ```
 
-### 4) Secure export / import (Diffie-Hellman)
-
-Run on the **recipient** device first to create the authenticated DH handshake:
+### Cleaning Up Test Data
 
 ```bash
-python3 run.py prepare-import \
-    --recipient bob --sender alice \
-    --out transfer/recipient-session.json
+make clean-data
 ```
 
-Then run on the **sender** device to export:
+> This permanently deletes all files inside the `data/` directory. Use with caution.
 
-```bash
-python3 run.py export \
-    --sender alice --master-password alice-secret \
-    --recipient-session transfer/recipient-session.json \
-    --out transfer/package.json
-```
-
-Finally run on the **recipient** device to import:
-
-```bash
-python3 run.py import \
-    --recipient bob --sender alice \
-    --master-password bob-secret \
-    --package transfer/package.json
-```
-
-## Running Tests
-
-See [`tests/TESTING.md`](tests/TESTING.md) for detailed per-module instructions.
-
-```bash
-# Full suite
-python3 -m unittest discover -s tests -p "test_*.py" -v
-
-# Individual module
-python3 -m unittest tests.test_elgamal -v
-python3 -m unittest tests.test_vault_manager -v
-python3 -m unittest tests.test_auth -v
-python3 -m unittest tests.test_exporter -v
-python3 -m unittest tests.test_e2e -v
-```
-
-## Files Created at Runtime
-
-Under `--base-dir` (default `data/`):
-
-| Path | Description |
-|---|---|
-| `config/crypto_params.json` | Shared ElGamal and DH parameters (generated once) |
-| `users/<user>/elgamal_private.json` | Private key (chmod 600) |
-| `users/<user>/elgamal_public.json` | Public key (shareable) |
-| `users/<user>/vault.json` | AES-GCM encrypted and ElGamal-signed vault |
-| `users/<user>/sessions/<id>.json` | Ephemeral DH import session state |
+---
