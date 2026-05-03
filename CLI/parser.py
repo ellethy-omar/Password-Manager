@@ -18,12 +18,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # --- Module 1: user initialisation ---
+    # ------------------------------------------------------------------ #
+    # Module 1 — User initialisation                                       #
+    # ------------------------------------------------------------------ #
     init = subparsers.add_parser("init-user", help="Initialize a new user and empty vault")
     init.add_argument("--user", required=True)
     init.add_argument("--master-password", required=True)
 
-    # --- Module 2: credential management ---
+    # ------------------------------------------------------------------ #
+    # Module 2 — Credential management                                     #
+    # ------------------------------------------------------------------ #
     add = subparsers.add_parser("add", help="Add a credential to the vault")
     add.add_argument("--user", required=True)
     add.add_argument("--master-password", required=True)
@@ -49,39 +53,33 @@ def build_parser() -> argparse.ArgumentParser:
     delete.add_argument("--site", required=True)
     delete.add_argument("--username", required=True)
 
-    list_cmd = subparsers.add_parser("list", help="List all credentials")
+    list_cmd = subparsers.add_parser("list", help="List all credentials in the vault")
     list_cmd.add_argument("--user", required=True)
     list_cmd.add_argument("--master-password", required=True)
 
-    # --- Module 3: vault integrity ---
+    # ------------------------------------------------------------------ #
+    # Module 3 — Vault signature verification                              #
+    # ------------------------------------------------------------------ #
     verify = subparsers.add_parser("verify", help="Verify the vault's digital signature")
     verify.add_argument("--user", required=True)
 
-    # --- Module 4: export / import ---
-    prepare = subparsers.add_parser(
-        "prepare-import",
-        help="Prepare a signed DH session for the recipient (run on recipient device)",
-    )
-    prepare.add_argument("--recipient", required=True)
-    prepare.add_argument("--sender", required=True)
-    prepare.add_argument("--out", type=Path, required=True)
-
+    # ------------------------------------------------------------------ #
+    # Module 4 — Secure vault export / import via Diffie-Hellman           #
+    # ------------------------------------------------------------------ #
     export_cmd = subparsers.add_parser(
         "export",
-        help="Export the sender's vault securely to a recipient",
+        help="Export the sender's vault securely to a receiver (sender side)",
     )
-    export_cmd.add_argument("--sender", required=True)
-    export_cmd.add_argument("--master-password", required=True)
-    export_cmd.add_argument("--recipient-session", type=Path, required=True)
-    export_cmd.add_argument("--out", type=Path, required=True)
+    export_cmd.add_argument("--sender", required=True, help="Username of the exporting user")
+    export_cmd.add_argument("--master-password", required=True, help="Sender's master password")
+    export_cmd.add_argument("--receiver", required=True, help="Username of the importing user")
 
     import_cmd = subparsers.add_parser(
         "import",
-        help="Import a received transfer package",
+        help="Import a vault from a sender (receiver side)",
     )
-    import_cmd.add_argument("--recipient", required=True)
-    import_cmd.add_argument("--sender", required=True)
-    import_cmd.add_argument("--master-password", required=True)
-    import_cmd.add_argument("--package", type=Path, required=True)
+    import_cmd.add_argument("--receiver", required=True, help="Username of the importing user")
+    import_cmd.add_argument("--sender", required=True, help="Username of the exporting user")
+    import_cmd.add_argument("--master-password", required=True, help="Receiver's master password")
 
     return parser

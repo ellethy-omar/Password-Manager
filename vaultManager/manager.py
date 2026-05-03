@@ -16,23 +16,9 @@ from vaultManager.crypto import VaultCrypto
 
 
 class VaultManager:
-    """Manages credential storage inside an encrypted, signed vault."""
-
     def __init__(self, base_dir: Path, signer):
-        """
-        Parameters
-        ----------
-        base_dir : Path
-            Root directory that holds *users/* and *config/* subdirectories.
-        signer : auth.VaultSigner
-            The signer instance used to sign/verify vault files.
-        """
         self.base_dir = base_dir
         self.signer = signer
-
-    # ------------------------------------------------------------------
-    # Path helpers
-    # ------------------------------------------------------------------
 
     def user_dir(self, username: str) -> Path:
         return self.base_dir / "users" / username
@@ -43,12 +29,7 @@ class VaultManager:
     def sessions_dir(self, username: str) -> Path:
         return self.user_dir(username) / "sessions"
 
-    # ------------------------------------------------------------------
-    # Low-level encrypt / decrypt
-    # ------------------------------------------------------------------
-
     def _load_entries(self, username: str, master_password: str) -> List[Dict[str, str]]:
-        """Read, signature-verify, decrypt, and return the credential list."""
         vault = json.loads(self.vault_path(username).read_text(encoding="utf-8"))
 
         if not self.signer.verify(vault, username):
@@ -77,10 +58,6 @@ class VaultManager:
         data_key = VaultCrypto.derive_data_key(master_password)
         encrypted = VaultCrypto.aes_gcm_encrypt(data_key, b"[]")
         self.signer.sign_and_save(username, encrypted, signer=username)
-
-    # ------------------------------------------------------------------
-    # CRUD
-    # ------------------------------------------------------------------
 
     def add_credential(
         self,
@@ -118,7 +95,6 @@ class VaultManager:
         login: str,
         new_password: str,
     ) -> None:
-        """Update the password for the matching credential entry."""
         entries = self._load_entries(username, master_password)
         for entry in entries:
             if entry["site"] == site and entry["username"] == login:
@@ -134,7 +110,6 @@ class VaultManager:
         site: str,
         login: str,
     ) -> None:
-        """Remove the matching credential entry from the vault."""
         entries = self._load_entries(username, master_password)
         updated = [
             e for e in entries

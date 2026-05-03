@@ -5,7 +5,6 @@ from CLI.app import PasswordManagerApp
 from shared.printPrinter import success, error
 
 def dispatch(app: PasswordManagerApp, args) -> None:
-    """Execute CLI command safely."""
     try:
         COMMANDS[args.command](app, args)
     except Exception as exc:
@@ -59,24 +58,23 @@ def handle_verify(app: PasswordManagerApp, args) -> None:
         error("Vault signature is INVALID")
         raise SystemExit(1)
 
-
-def handle_prepare_import(app: PasswordManagerApp, args) -> None:
-    app.prepare_import_session(args.recipient, args.sender, args.out)
-    success(f"Recipient import session created at {args.out}")
-
-
 def handle_export(app: PasswordManagerApp, args) -> None:
     app.export_vault(
-        args.sender, args.master_password, args.recipient_session, args.out
+        sender=args.sender,
+        master_password=args.master_password,
+        receiver=args.receiver,
     )
-    success(f"Export package created at {args.out}")
+    success("Vault exported successfully")
 
 
 def handle_import(app: PasswordManagerApp, args) -> None:
     app.import_vault(
-        args.recipient, args.sender, args.master_password, args.package
+        receiver=args.receiver,
+        sender=args.sender,
+        master_password=args.master_password,
     )
-    success("Vault imported and re-signed by recipient")
+    success("Vault imported and re-signed by receiver")
+ 
 
 COMMANDS: dict[str, Callable[[PasswordManagerApp, object], None]] = {
     "init-user": handle_init,
@@ -86,7 +84,6 @@ COMMANDS: dict[str, Callable[[PasswordManagerApp, object], None]] = {
     "delete": handle_delete,
     "list": handle_list,
     "verify": handle_verify,
-    "prepare-import": handle_prepare_import,
     "export": handle_export,
     "import": handle_import,
 }

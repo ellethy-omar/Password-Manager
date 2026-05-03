@@ -16,22 +16,21 @@ from elGamal.signature import ElGamalSignature
 from auth.signer import VaultSigner
 from vaultManager.manager import VaultManager
 from vaultManager.crypto import VaultCrypto
-from exporter.vault_exporter import VaultExporter
+from exporter.VaultSender import VaultSender
+from exporter.VaultReceiver import VaultReceiver
 
 
 class PasswordManagerApp:
-    """Central orchestrator that wires all four modules together."""
-
     def __init__(self, base_dir: Path = DEFAULT_DATA_DIR):
         self.base_dir = base_dir
         self.params_path = base_dir / PARAMS_PATH
-
+ 
         self.signer = VaultSigner(base_dir)
         self.vault_manager = VaultManager(base_dir, self.signer)
-        self.exporter = VaultExporter(base_dir, self.vault_manager, self.signer)
+        self.sender = VaultSender(base_dir, self.vault_manager, self.signer)
+        self.receiver = VaultReceiver(base_dir, self.vault_manager, self.signer)
 
     def ensure_parameters(self) -> Dict:
-        """Load existing shared parameters or generate and persist new ones."""
         if self.params_path.exists():
             return json.loads(self.params_path.read_text(encoding="utf-8"))
 
@@ -49,7 +48,6 @@ class PasswordManagerApp:
         return params
 
     def initialize_user(self, username: str, master_password: str) -> None:
-        """Create ElGamal keys and an empty encrypted vault for *username*."""
         params = self.ensure_parameters()["elgamal"]
         user_dir = self.base_dir / "users" / username
         user_dir.mkdir(parents=True, exist_ok=True)
@@ -99,11 +97,13 @@ class PasswordManagerApp:
         vault = json.loads(path.read_text(encoding="utf-8"))
         return self.signer.verify(vault, username)
 
-    def prepare_import_session(self, recipient, sender, session_path):
-        self.exporter.prepare_import_session(recipient, sender, session_path)
+    def export_vault(self, sender: str, master_password: str, receiver: str) -> None:
+        self.sender.init_parameters(sender, receiver)
+        self.sender.key_exchange_sender()
+        self.sender.transfer_vault(master_password)
 
-    def export_vault(self, sender, master_password, recipient_session_path, package_path):
-        self.exporter.export_vault(sender, master_password, recipient_session_path, package_path)
-
-    def import_vault(self, recipient, sender, master_password, package_path):
-        self.exporter.import_vault(recipient, sender, master_password, package_path)
+    def import_vault(self, receiver: str, sender: str, master_password: str) -> None:
+        self.receiver.init_parameters(sender, receiver)
+        self.receiver.key_exchange_receiver()
+        self.receiver.import_vault(master_password)
+ 
