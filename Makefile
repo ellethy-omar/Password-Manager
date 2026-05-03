@@ -1,5 +1,14 @@
 PYTHON := py
 MAIN := run.py
+DATA_DIR := data
+ifeq ($(OS),Windows_NT)
+    RM_DIR = rmdir /s /q
+    MKDIR = mkdir
+else
+    RM_DIR = rm -rf
+    MKDIR = mkdir -p
+endif
+
 
 USER := test_user
 MASTER := test_master_password
@@ -104,8 +113,28 @@ test-transfer:
 		--user            $(RECEIVER) \
 		--master-password $(RECEIVER_MASTER)
 
+.PHONY: clean-data
+
+ifeq ($(OS),Windows_NT)
+
+clean-data:
+	@echo Cleaning $(DATA_DIR) on Windows...
+	@if exist "$(DATA_DIR)" ( \
+		for /d %%i in ("$(DATA_DIR)\*") do rmdir /s /q "%%i" & \
+		del /q "$(DATA_DIR)\*" \
+	)
+
+else
+
+clean-data:
+	@echo Cleaning $(DATA_DIR) on Unix...
+	@find $(DATA_DIR) -mindepth 1 -delete
+
+endif
+
 .PHONY: test-flow
 test-crud:
+	$(MAKE) clean-data
 	$(MAKE) create-user
 	$(MAKE) add-credential
 	$(MAKE) retrieve
