@@ -35,7 +35,7 @@ Then open your browser and navigate to `http://localhost:8501`.
 
 ---
 
-## 🛠️ Makefile Workflows
+## Makefile Workflows
 
 A `Makefile` is provided for quickly running common workflows during development and testing. Default values for users, passwords, and sites are pre-configured at the top of the `Makefile` and can be overridden at runtime.
 
